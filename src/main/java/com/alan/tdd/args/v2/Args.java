@@ -1,4 +1,6 @@
-package com.alan.tdd.args;
+package com.alan.tdd.args.v2;
+
+import com.alan.tdd.args.exceptions.IllegalOptionException;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Parameter;
@@ -14,12 +16,17 @@ public class Args {
 
             Object[] values = Arrays.stream(constructor.getParameters()).map(it -> parseOption(arguments, it)).toArray();
             return (T) constructor.newInstance(values);
+        } catch (IllegalOptionException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
     private static Object parseOption(List<String> arguments, Parameter parameter) {
+        if (!parameter.isAnnotationPresent(Option.class)) {
+            throw new IllegalOptionException(parameter.getName());
+        }
         Option option = parameter.getAnnotation(Option.class);
 
         Class<?> type = parameter.getType();
@@ -45,8 +52,8 @@ public class Args {
     // 利用一个 Map 查表法优化 getOptionParser
     private static Map<Class<?>, OptionParser> PARSER = Map.of(
             boolean.class, new BooleanOptionParser(),
-            int.class, new SingleValueOptionParser<>(Integer::parseInt),
-            String.class, new SingleValueOptionParser<>(String::valueOf));
+            int.class, new SingleValueOptionParser<>(0, Integer::parseInt),
+            String.class, new SingleValueOptionParser<>("", String::valueOf));
 
     private static OptionParser getOptionParser(Class<?> type) {
         return PARSER.get(type);

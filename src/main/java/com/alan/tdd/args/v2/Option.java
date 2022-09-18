@@ -1,4 +1,4 @@
-package com.alan.tdd.args;
+package com.alan.tdd.args.v2;
 
 
 import java.lang.annotation.ElementType;

@@ -1,6 +1,6 @@
 package com.alan.tdd.args.v1;
 
-import com.alan.tdd.args.Option;
+import com.alan.tdd.args.v2.Option;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Parameter;
