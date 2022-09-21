@@ -3,69 +3,69 @@ package com.alan.di;
 import javax.inject.Inject;
 import javax.inject.Provider;
 import java.lang.reflect.Constructor;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.lang.reflect.InvocationTargetException;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static java.util.Arrays.stream;
 
 public class Context {
 
-    private Map<Class<?>, Object> component = new HashMap<>();
-    private Map<Class<?>, Class<?>> componentImplementation = new HashMap<>();
-
     private Map<Class<?>, Provider<?>> providers = new HashMap<>();
 
-    public <Type> void bind(Class<Type> componentClass, Type instance) {
-        providers.put(componentClass, () -> instance);
+    public <Type> void bind(Class<Type> type, Type instance) {
+        providers.put(type, (Provider<Type>) () -> instance);
     }
 
-    public <Type, Implementation extends Type>
-    void bind(Class<Type> type, Class<Implementation> implementation) {
-        Constructor[] injectConstructors = Arrays.stream(implementation.getConstructors())
-                .filter(c -> c.isAnnotationPresent(Inject.class))
-                .toArray(Constructor[]::new);
-        if (injectConstructors.length > 1) {
-            throw new IllegalComponentException();
-        }
-        Boolean noInjectNorDefaultConstructor = injectConstructors.length == 0
-                && Arrays.stream(implementation.getConstructors())
-                .filter(c -> c.getParameters().length == 0)
-                .findFirst()
-                .map(c -> false)
-                .orElse(true);
-        if ( noInjectNorDefaultConstructor ) {
-            throw new IllegalComponentException();
-        }
-
-        providers.put(type, () -> {
+    public void bind(Class type, Class implementation) {
+        Constructor injectConstructor = getInjectConstructor(implementation);
+        providers.put(type, (Provider) () -> {
             try {
-                Constructor<Implementation> injectConstructor = getInjectConstructor(implementation);
-                Object[] dependencies = Arrays.stream(injectConstructor.getParameters())
-                        .map(p -> get(p.getType()))
-                        .toArray(Object[]::new);
-                return (Type) injectConstructor.newInstance(dependencies);
-            } catch (Exception e) {
+                Object[] dependencies = stream(injectConstructor.getParameters()).map(p -> {
+                    try {
+                        return get(p.getType()).orElseThrow(DependencyNotFoundException::new);
+                    } catch (Throwable e) {
+                        throw new DependencyNotFoundException();
+                    }
+                }).toArray(Object[]::new);
+                return injectConstructor.newInstance(dependencies);
+            } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
                 throw new RuntimeException(e);
             }
         });
     }
 
     private static <Type> Constructor<Type> getInjectConstructor(Class<Type> implementation) {
-
         // 过滤出所有带有 Inject 注解的构造函数
-        Stream<Constructor<?>> injectConstructor = Arrays.stream(implementation.getConstructors()).filter(c -> c.isAnnotationPresent(Inject.class));
+        List<Constructor<?>> injectConstructors = stream(implementation.getConstructors()).
+                filter(c -> c.isAnnotationPresent(Inject.class)).toList();
 
-        return (Constructor<Type>) injectConstructor.findFirst().orElseGet(() -> {
+        if (injectConstructors.size() > 1) {
+            throw new IllegalComponentException();
+        }
+
+        boolean noInjectNorDefaultConstructor = injectConstructors.size() == 0
+                && stream(implementation.getConstructors())
+                .filter(c -> c.getParameters().length == 0)
+                .findFirst()
+                .map(c -> false)
+                .orElse(true);
+        if (noInjectNorDefaultConstructor) {
+            throw new IllegalComponentException();
+        }
+
+        return (Constructor) injectConstructors.stream().findFirst().orElseGet(() -> {
             try {
                 return implementation.getConstructor();
             } catch (NoSuchMethodException e) {
-                throw new RuntimeException(e);
+                throw new IllegalComponentException();
             }
         });
     }
 
-    public <Type> Type get(Class<Type> type) {
-        return (Type) providers.get(type).get();
+    public <Type> Optional get(Class<Type> type) {
+        return Optional.ofNullable(providers.get(type)).map(provider -> (Type) provider.get());
     }
 
 
