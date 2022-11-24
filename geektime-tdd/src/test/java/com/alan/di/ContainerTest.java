@@ -103,13 +103,21 @@ public class ContainerTest {
                 assertThrows(DependencyNotFoundException.class, ()-> context.get(Component.class));
             }
 
+            // todo:如果组件需要的依赖不存在，则抛出异常
             @Test
             public void should_return_empty_if_component_not_defined() {
                 Optional<Component> optional = context.get(Component.class);
                 assertTrue(optional.isEmpty());
             }
 
+            // todo:如果组件间存在循环依赖，则抛出异常
+            @Test
+            public void should_throws_exception_if_cyclic_dependencies_found() {
+                context.bind(Component.class,ComponentWithInjectConstructor.class);
+                context.bind(Component.class,DependencyDependedOnComponent.class);
 
+                assertThrows(CyclicDependenciesException.class,()-> context.get(Component.class));
+            }
         }
 
         @Nested
@@ -124,6 +132,15 @@ public class ContainerTest {
     }
 
     // ------------------------------------------------临时（解决完 idea no test found 后删除）BEGIN------------------------------------------------------------
+
+    @Test
+    public void should_throws_exception_if_cyclic_dependencies_found() {
+        Context context = new Context();
+        context.bind(Component.class,ComponentWithInjectConstructor.class);
+        context.bind(Component.class,DependencyDependedOnComponent.class);
+
+        assertThrows(CyclicDependenciesException.class,()-> context.get(Component.class));
+    }
 
     @Test
     public void should_return_empty_if_component_not_defined() {
@@ -269,5 +286,14 @@ class DependencyWithInjectConstructor implements Dependency {
 
     public String getDependency() {
         return dependency;
+    }
+}
+
+class DependencyDependedOnComponent implements Dependency{
+    private Component component;
+
+    @Inject
+    public DependencyDependedOnComponent(Component component) {
+        this.component = component;
     }
 }
